@@ -3,13 +3,20 @@ import { AntDesign, Ionicons } from "@expo/vector-icons";
 import polyline from "@mapbox/polyline";
 import Constants from "expo-constants";
 import React, { useEffect, useState, useCallback } from "react";
-import { Linking, Text, TouchableOpacity, View, Alert } from "react-native";
-import MapView, {
-  Marker,
-  Polyline,
-  PROVIDER_GOOGLE,
-  Region,
-} from "react-native-maps";
+import { Linking, Text, TouchableOpacity, View, Alert, Platform } from "react-native";
+// react-native-maps is native-only — lazy import to avoid web crash
+let MapView: any = null;
+let Marker: any = null;
+let Polyline: any = null;
+let PROVIDER_GOOGLE: any = null;
+type Region = any;
+if (Platform.OS !== "web") {
+  const maps = require("react-native-maps");
+  MapView = maps.default;
+  Marker = maps.Marker;
+  Polyline = maps.Polyline;
+  PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
+}
 import { Button, Card } from "react-native-paper";
 import { formatTime, getPriorityInfo, getStatusClasses, getStatusLabel, getStatusTextClasses } from "@/Lib/utils";
 import { DeliveryStatusChange } from "@/Lib/fetchDataServices";

@@ -11,8 +11,22 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActivityIndicator } from "react-native-paper";
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
-import DateTimePicker from "@react-native-community/datetimepicker";
+// react-native-maps is native-only — lazy import to avoid web crash
+let MapView: any = null;
+let Marker: any = null;
+let Polyline: any = null;
+let PROVIDER_GOOGLE: any = null;
+if (Platform.OS !== "web") {
+  const maps = require("react-native-maps");
+  MapView = maps.default;
+  Marker = maps.Marker;
+  Polyline = maps.Polyline;
+  PROVIDER_GOOGLE = maps.PROVIDER_GOOGLE;
+}
+let DateTimePicker: any = null;
+if (Platform.OS !== "web") {
+  DateTimePicker = require("@react-native-community/datetimepicker").default;
+}
 import { MaterialIcons, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { getRouteByDriverIdAndDate } from "@/Lib/fetchDataServices";
 import { RouteData } from "@/types";
