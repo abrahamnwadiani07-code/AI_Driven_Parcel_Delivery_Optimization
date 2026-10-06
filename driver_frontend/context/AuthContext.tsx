@@ -3,24 +3,18 @@
 import type React from "react";
 import { createContext, useState, useContext, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import axios from "axios";
 import Toast from "react-native-toast-message";
-// Remove useRouter import from here - not needed!
+import { api } from "@/Lib/api";
 
-interface DriverForLogin {
-  driver_id: string;
-  first_name: string;
-  last_name: string | null;
+interface BFMUser {
+  id: string;
   email: string;
-  phone_number: string;
-  address: string | null;
-  start_location_latitude: number | null;
-  start_location_longitude: number | null;
-  start_location: string;
-  refresh_token: string | null;
-  status: string;
-  createdAt: Date;
-  updatedAt: Date;
+  full_name: string;
+  role: string;
+  phone?: string;
+  country_code?: string;
+  is_verified?: boolean;
+  delivery_agent_id?: string;
 }
 
 type AuthContextType = {
@@ -28,7 +22,7 @@ type AuthContextType = {
   isMainLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
-  driver: DriverForLogin | null;
+  driver: BFMUser | null;
   token: string | null;
 };
 
@@ -41,13 +35,6 @@ const AuthContext = createContext<AuthContextType>({
   token: null,
 });
 
-const axiosInstance = axios.create({
-  baseURL: "http://192.168.31.193:8000/api",
-  // baseURL: "http://26.219.114.145:8000/api",
-  // baseURL: "http://192.168.30.246:8000/api",
-  withCredentials: true,
-});
-
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -55,24 +42,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isMainLoading, setisMainLoading] = useState(true);
-  const [driver, setDriver] = useState<DriverForLogin | null>(null);
+  const [driver, setDriver] = useState<BFMUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
-  // Remove router from here - navigation will be handled by layouts!
-
   useEffect(() => {
-    // Check if user is logged in
     const checkLoginStatus = async () => {
       try {
         const driverString = await AsyncStorage.getItem("driver");
         const tokenString = await AsyncStorage.getItem("token");
-        if (driverString) {
-          const driverData = JSON.parse(driverString);
-          setDriver(driverData);
-          setIsAuthenticated(true);
-        }
-        if (tokenString) {
+        if (driverString && tokenString) {
+          setDriver(JSON.parse(driverString));
           setToken(tokenString);
+          setIsAuthenticated(true);
         }
       } catch (error) {
         console.error("Failed to get driver data", error);
@@ -80,37 +61,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setisMainLoading(false);
       }
     };
-
     checkLoginStatus();
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
-      if (email && password) {
-        console.log("Attempting to login with", email);
-        console.log("password", password);
+      if (!email || !password) return false;
 
-        const response = await axiosInstance.post("/auth/login/driver", {
-          email,
-          password,
-        });
+      const response = await api.post("/auth/login", { email, password });
+      const data = response.data;
+      const accessToken = data.token || data.data?.token || data.access_token || data.data?.access_token;
+      const userData = data.user || data.data?.user;
 
-        const driverData = response.data.data.driver;
-        const token = response.data.data.token;
-        if (!driverData || !token) {
-          throw new Error("Invalid login response");
-        }
-        console.log("Login successful", driverData, token);
-        await AsyncStorage.setItem("driver", JSON.stringify(driverData));
-        await AsyncStorage.setItem("token", token);
-        setDriver(driverData);
-        setToken(token);
-        setIsAuthenticated(true);
-        // Remove router.push - layout will handle navigation automatically!
-        return true;
+      if (!accessToken || !userData) {
+        throw new Error("Invalid login response");
       }
-      return false;
-    } catch (error) {
+
+      // Check role — only delivery agents, admins, delivery managers
+      if (!["delivery_agent", "admin", "delivery_manager"].includes(userData.role)) {
+        Toast.show({
+          type: "error",
+          text1: "Access Denied",
+          text2: "This app is for delivery drivers only.",
+        });
+        return false;
+      }
+
+      await AsyncStorage.setItem("driver", JSON.stringify(userData));
+      await AsyncStorage.setItem("token", accessToken);
+      if (userData.country_code) {
+        await AsyncStorage.setItem("country", userData.country_code);
+      }
+      setDriver(userData);
+      setToken(accessToken);
+      setIsAuthenticated(true);
+
+      Toast.show({
+        type: "success",
+        text1: "Welcome!",
+        text2: `Signed in as ${userData.full_name}`,
+      });
+
+      return true;
+    } catch (error: any) {
+      const msg = error?.response?.data?.error || error?.message || "Login failed";
+      Toast.show({
+        type: "error",
+        text1: "Login Failed",
+        text2: msg,
+      });
       console.error("Login failed", error);
       return false;
     }
@@ -118,25 +117,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const logout = async () => {
     try {
-      console.log("Logging out");
-      Toast.show({
-        type: "success",
-        text1: "Logout Successful",
-        text2: "You have been logged out successfully.",
-      });
       await AsyncStorage.removeItem("driver");
       await AsyncStorage.removeItem("token");
+      await AsyncStorage.removeItem("country");
       setDriver(null);
       setToken(null);
       setIsAuthenticated(false);
-      // Remove router.push("/") - layout will handle navigation automatically!
-      console.log("Logout successful");
-
-      // Debug logs
-      const driverString = await AsyncStorage.getItem("driver");
-      const tokenString = await AsyncStorage.getItem("token");
-      console.log("Driver after logout:", driverString);
-      console.log("Token after logout:", tokenString);
+      Toast.show({
+        type: "success",
+        text1: "Signed Out",
+        text2: "You have been logged out.",
+      });
     } catch (error) {
       console.error("Logout failed", error);
     }
