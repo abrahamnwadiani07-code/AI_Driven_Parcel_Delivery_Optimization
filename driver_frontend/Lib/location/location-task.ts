@@ -7,8 +7,10 @@ import { io } from "socket.io-client";
 const LOCATION_TASK_NAME = "background-location-task";
 console.log("location-task.ts loaded");
 // Initialize socket
-// const socket = io("http://localhost:4000");
-const socket = io("http://192.168.31.193:4000");
+const socket = io("https://bestfoodmarket.onrender.com", {
+  transports: ["websocket", "polling"],
+  timeout: 20000,
+});
 socket.on("connect", () => {
   console.log("Socket connected:", socket.id);
 });
