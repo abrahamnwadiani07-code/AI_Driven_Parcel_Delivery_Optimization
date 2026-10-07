@@ -1,9 +1,9 @@
 import { DeliveryDetailsFetcher, AcceptDelivery, DeclineDelivery, CompleteDelivery } from "@/Lib/fetchDataServices";
 import AntDesign from "@expo/vector-icons/AntDesign";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { Link, useLocalSearchParams } from "expo-router";
 import { useState, useCallback, useEffect } from "react";
-import { Text, View, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Linking } from "react-native";
+import { Text, View, ScrollView, ActivityIndicator, Alert, TouchableOpacity, Linking, Platform } from "react-native";
 import { Button } from "react-native-paper";
 import Toast from "react-native-toast-message";
 
@@ -11,6 +11,26 @@ function addressToString(addr: any) {
   if (!addr) return "Address not available";
   if (typeof addr === "string") return addr;
   return [addr.line1, addr.line2, addr.city, addr.postcode].filter(Boolean).join(", ");
+}
+
+function EmbeddedMap({ pickup, dropoff }: { pickup: string; dropoff: string }) {
+  if (Platform.OS !== "web") return null;
+  const origin = encodeURIComponent(pickup);
+  const destination = encodeURIComponent(dropoff);
+  // Use Google Maps Embed API (free, no key needed for basic embed)
+  const src = `https://www.google.com/maps/embed/v1/directions?key=AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8&origin=${origin}&destination=${destination}&mode=driving`;
+
+  return (
+    <View style={{ height: 300, borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
+      <iframe
+        src={src}
+        style={{ border: 0, width: "100%", height: "100%" } as any}
+        allowFullScreen
+        loading="lazy"
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+    </View>
+  );
 }
 
 export default function Active() {
@@ -91,9 +111,8 @@ export default function Active() {
     ]);
   };
 
-  const navigateTo = (lat: number, lng: number) => {
-    if (!lat || !lng) return;
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+  const navigateTo = (address: string) => {
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
     Linking.openURL(url);
   };
 
@@ -143,15 +162,15 @@ export default function Active() {
   return (
     <ScrollView className="flex-1 bg-gray-50">
       {/* Header */}
-      <View className="flex-row items-center p-4 mt-2">
+      <View className="flex-row items-center p-4 mt-2 bg-white">
         <Link href="/(tabs)">
-          <View className="rounded-lg p-2 mr-3">
-            <AntDesign name="back" size={28} color="#111827" />
+          <View className="rounded-lg p-2 mr-3 bg-gray-100">
+            <AntDesign name="arrowleft" size={24} color="#111827" />
           </View>
         </Link>
         <View className="flex-1">
           <Text className="text-gray-900 font-bold text-xl">Active Delivery</Text>
-          <Text className="text-sm text-gray-500">#{requestId.slice(0, 8).toUpperCase()}</Text>
+          <Text className="text-sm text-gray-500">Delivery ID: {requestId.slice(0, 8).toUpperCase()}</Text>
         </View>
         {fee && (
           <View className="bg-green-100 px-3 py-1 rounded-full">
@@ -160,111 +179,193 @@ export default function Active() {
         )}
       </View>
 
+      {/* Embedded Map with directions */}
+      <View className="px-4 mt-3">
+        <EmbeddedMap pickup={pickupAddr} dropoff={dropoffAddr} />
+      </View>
+
       <View className="px-4 gap-3">
-        {/* Status banner */}
-        <View className={`p-3 rounded-lg ${isDone ? "bg-green-100" : isCancelled ? "bg-red-100" : isActive ? "bg-blue-100" : "bg-yellow-100"}`}>
-          <Text className={`font-bold text-center text-base ${isDone ? "text-green-800" : isCancelled ? "text-red-800" : isActive ? "text-blue-800" : "text-yellow-800"}`}>
-            {status.replace(/_/g, " ").toUpperCase()}
-          </Text>
-        </View>
-
-        {/* Pickup */}
+        {/* Delivery info bar */}
         <View className="bg-white p-4 rounded-lg border border-gray-200">
           <View className="flex-row items-center mb-2">
-            <View className="w-3 h-3 rounded-full bg-green-500 mr-2" />
-            <Text className="text-xs font-bold text-gray-400 uppercase">Pickup</Text>
+            <Ionicons name="location" size={20} color="#2563eb" />
+            <View className="ml-2 flex-1">
+              <Text className="font-bold text-base text-gray-900" numberOfLines={2}>{dropoffAddr}</Text>
+              <Text className="text-xs text-gray-500">Delivery #{requestId.slice(0, 8).toUpperCase()}</Text>
+            </View>
           </View>
-          <Text className="text-base font-semibold text-gray-900">{vendorName}</Text>
-          <Text className="text-sm text-gray-500 mt-1">{pickupAddr}</Text>
-          {(delivery.pickup_lat && delivery.pickup_lng) && (
-            <TouchableOpacity className="mt-2 bg-blue-50 p-2 rounded items-center" onPress={() => navigateTo(delivery.pickup_lat, delivery.pickup_lng)}>
-              <Text className="text-blue-600 font-semibold text-sm">Navigate to Pickup</Text>
-            </TouchableOpacity>
+
+          <View className="flex-row justify-between items-center mt-2">
+            <View className="flex-row items-center">
+              <Ionicons name="time" size={18} color="#16a34a" />
+              <Text className="ml-1 text-sm font-medium text-gray-700">
+                ETA: {delivery.estimated_time || "Calculating..."}
+              </Text>
+            </View>
+
+            {(isPending || isActive) && (
+              <TouchableOpacity
+                className="flex-row items-center bg-[#FFD86B] rounded-lg px-4 py-2"
+                onPress={() => navigateTo(dropoffAddr)}
+              >
+                <AntDesign name="enviromento" size={16} color="black" />
+                <Text className="text-black font-semibold text-sm ml-2">Start Delivery</Text>
+              </TouchableOpacity>
+            )}
+
+            {isDone && (
+              <View className="flex-row items-center bg-green-100 rounded-lg px-4 py-2">
+                <AntDesign name="check" size={16} color="#166534" />
+                <Text className="text-green-800 font-semibold text-sm ml-2">Completed</Text>
+              </View>
+            )}
+          </View>
+
+          <View className="mt-3 flex-row justify-between items-center">
+            <Text className="text-xs text-gray-500">
+              From: <Text className="font-medium text-gray-700">{pickupAddr}</Text>
+            </Text>
+            <View className={`px-3 py-1 rounded-full ${isDone ? "bg-green-100" : isActive ? "bg-blue-100" : isCancelled ? "bg-red-100" : "bg-yellow-100"}`}>
+              <Text className={`text-xs font-medium ${isDone ? "text-green-800" : isActive ? "text-blue-800" : isCancelled ? "text-red-800" : "text-yellow-800"}`}>
+                {delivery.source === "meal" ? "Meal" : delivery.source === "grocery" ? "Grocery" : "Delivery"}
+                {" "}Priority
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Package Details */}
+        <View className="bg-gray-900 p-4 rounded-lg">
+          <View className="flex-row items-center mb-3">
+            <MaterialCommunityIcons name="package-variant" size={22} color="white" />
+            <Text className="text-white font-bold text-base ml-2">Package Details</Text>
+          </View>
+          <View className="flex-row gap-3 mb-3">
+            <View className="flex-1 bg-gray-700 p-3 rounded-lg">
+              <View className="flex-row items-center mb-1">
+                <MaterialCommunityIcons name="store" size={16} color="#9CA3AF" />
+                <Text className="text-gray-400 text-xs ml-1">Vendor</Text>
+              </View>
+              <Text className="text-white font-medium">{vendorName}</Text>
+            </View>
+            <View className="flex-1 bg-gray-700 p-3 rounded-lg">
+              <View className="flex-row items-center mb-1">
+                <MaterialCommunityIcons name="tag" size={16} color="#9CA3AF" />
+                <Text className="text-gray-400 text-xs ml-1">Source</Text>
+              </View>
+              <Text className="text-white font-medium capitalize">{delivery.source || "Order"}</Text>
+            </View>
+          </View>
+          {delivery.order_total && (
+            <View className="bg-gray-700 p-3 rounded-lg">
+              <Text className="text-gray-400 text-xs">Order Total</Text>
+              <Text className="text-white font-bold text-lg">{parseFloat(delivery.order_total).toFixed(2)}</Text>
+            </View>
+          )}
+          {(delivery.notes || delivery.special_instructions) && (
+            <View className="mt-3 bg-yellow-900/30 p-3 rounded-lg">
+              <Text className="text-yellow-400 text-xs font-bold mb-1">SPECIAL HANDLING</Text>
+              <Text className="text-gray-300 text-sm">{delivery.notes || delivery.special_instructions}</Text>
+            </View>
           )}
         </View>
 
-        {/* Dropoff */}
-        <View className="bg-white p-4 rounded-lg border border-gray-200">
-          <View className="flex-row items-center mb-2">
-            <View className="w-3 h-3 rounded-full bg-orange-500 mr-2" />
-            <Text className="text-xs font-bold text-gray-400 uppercase">Dropoff</Text>
+        {/* Customer Information */}
+        <View className="bg-gray-900 p-4 rounded-lg">
+          <Text className="text-white font-bold text-base mb-3">Customer Information</Text>
+          <Text className="text-white text-lg font-semibold">{customerName}</Text>
+          <Text className="text-gray-400 text-sm mt-1">{dropoffAddr}</Text>
+
+          <View className="flex-row gap-3 mt-3">
+            {delivery.customer_phone && (
+              <TouchableOpacity
+                className="flex-1 bg-gray-700 p-3 rounded-lg flex-row items-center justify-center"
+                onPress={() => Linking.openURL(`tel:${delivery.customer_phone}`)}
+              >
+                <MaterialCommunityIcons name="phone" size={20} color="#4ade80" />
+                <Text className="text-white ml-2 font-medium">Call</Text>
+              </TouchableOpacity>
+            )}
+            {delivery.customer_phone && (
+              <TouchableOpacity
+                className="flex-1 bg-gray-700 p-3 rounded-lg flex-row items-center justify-center"
+                onPress={() => Linking.openURL(`sms:${delivery.customer_phone}`)}
+              >
+                <MaterialCommunityIcons name="message-text" size={20} color="#60a5fa" />
+                <Text className="text-white ml-2 font-medium">Message</Text>
+              </TouchableOpacity>
+            )}
           </View>
-          <Text className="text-base font-semibold text-gray-900">{customerName}</Text>
-          <Text className="text-sm text-gray-500 mt-1">{dropoffAddr}</Text>
-          {delivery.customer_phone && (
-            <TouchableOpacity className="mt-2" onPress={() => Linking.openURL(`tel:${delivery.customer_phone}`)}>
-              <Text className="text-blue-600 text-sm">Call: {delivery.customer_phone}</Text>
-            </TouchableOpacity>
-          )}
-          {(delivery.delivery_lat && delivery.delivery_lng) && (
-            <TouchableOpacity className="mt-2 bg-orange-50 p-2 rounded items-center" onPress={() => navigateTo(delivery.delivery_lat, delivery.delivery_lng)}>
-              <Text className="text-orange-600 font-semibold text-sm">Navigate to Customer</Text>
-            </TouchableOpacity>
+
+          {delivery.delivery_instructions && (
+            <View className="mt-3 bg-orange-900/30 p-3 rounded-lg flex-row items-start">
+              <MaterialCommunityIcons name="alert-circle" size={18} color="#fb923c" />
+              <View className="ml-2 flex-1">
+                <Text className="text-orange-400 text-xs font-bold">DELIVERY INSTRUCTIONS</Text>
+                <Text className="text-gray-300 text-sm mt-1">{delivery.delivery_instructions}</Text>
+              </View>
+            </View>
           )}
         </View>
-
-        {/* Notes */}
-        {(delivery.notes || delivery.special_instructions) && (
-          <View className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-            <Text className="text-xs font-bold text-yellow-700 uppercase mb-1">Special Instructions</Text>
-            <Text className="text-sm text-gray-800">{delivery.notes || delivery.special_instructions}</Text>
-          </View>
-        )}
 
         {/* Action buttons */}
         {isPending && (
           <View className="gap-2 mt-2 mb-6">
-            <Button mode="elevated" onPress={handleAccept} disabled={actionLoading} buttonColor="#FF6B35" contentStyle={{ paddingVertical: 8 }} className="rounded-lg">
-              <View className="flex-row items-center">
-                <AntDesign name="checkcircleo" size={20} color="white" />
-                <Text className="text-white font-semibold text-base ml-2">Accept Delivery</Text>
-              </View>
-            </Button>
-            <Button mode="outlined" onPress={handleDecline} disabled={actionLoading} textColor="#DC2626" contentStyle={{ paddingVertical: 8 }} className="rounded-lg border-red-400">
-              <View className="flex-row items-center">
-                <AntDesign name="closecircleo" size={20} color="#DC2626" />
-                <Text className="text-red-600 font-semibold text-base ml-2">Decline</Text>
-              </View>
-            </Button>
+            <TouchableOpacity
+              className="bg-[#FF6B35] rounded-lg py-4 flex-row items-center justify-center"
+              onPress={handleAccept}
+              disabled={actionLoading}
+            >
+              <AntDesign name="checkcircleo" size={20} color="white" />
+              <Text className="text-white font-bold text-base ml-2">Accept Delivery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="border border-red-400 rounded-lg py-4 flex-row items-center justify-center"
+              onPress={handleDecline}
+              disabled={actionLoading}
+            >
+              <AntDesign name="closecircleo" size={20} color="#DC2626" />
+              <Text className="text-red-600 font-bold text-base ml-2">Decline</Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {isActive && (
           <View className="gap-2 mt-2 mb-6">
-            <Button mode="elevated" onPress={handleComplete} disabled={actionLoading} buttonColor="#10B981" contentStyle={{ paddingVertical: 8 }} className="rounded-lg">
-              <View className="flex-row items-center">
-                <AntDesign name="checkcircleo" size={20} color="white" />
-                <Text className="text-white font-semibold text-base ml-2">Complete Delivery</Text>
-              </View>
-            </Button>
-            <Button mode="outlined" onPress={handleDecline} disabled={actionLoading} textColor="#DC2626" contentStyle={{ paddingVertical: 8 }} className="rounded-lg border-red-400">
-              <View className="flex-row items-center">
-                <AntDesign name="closecircleo" size={20} color="#DC2626" />
-                <Text className="text-red-600 font-semibold text-base ml-2">Cancel Delivery</Text>
-              </View>
-            </Button>
+            <TouchableOpacity
+              className="bg-[#10B981] rounded-lg py-4 flex-row items-center justify-center"
+              onPress={handleComplete}
+              disabled={actionLoading}
+            >
+              <MaterialCommunityIcons name="check-circle-outline" size={22} color="white" />
+              <Text className="text-white font-bold text-base ml-2">Complete Delivery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="border border-red-400 rounded-lg py-4 flex-row items-center justify-center"
+              onPress={handleDecline}
+              disabled={actionLoading}
+            >
+              <AntDesign name="closecircleo" size={20} color="#DC2626" />
+              <Text className="text-red-600 font-bold text-base ml-2">Cancel Delivery</Text>
+            </TouchableOpacity>
           </View>
         )}
 
         {isDone && (
           <View className="mt-2 mb-6">
-            <Button mode="elevated" disabled buttonColor="#10B981" contentStyle={{ paddingVertical: 8 }} className="rounded-lg">
-              <View className="flex-row items-center">
-                <AntDesign name="checkcircle" size={20} color="white" />
-                <Text className="text-white font-semibold text-base ml-2">Delivery Completed</Text>
-              </View>
-            </Button>
+            <View className="bg-green-100 rounded-lg py-4 flex-row items-center justify-center">
+              <AntDesign name="checkcircle" size={20} color="#166534" />
+              <Text className="text-green-800 font-bold text-base ml-2">Delivery Completed</Text>
+            </View>
           </View>
         )}
 
         {isCancelled && (
           <View className="mt-2 mb-6">
-            <Button mode="elevated" disabled buttonColor="#DC2626" contentStyle={{ paddingVertical: 8 }} className="rounded-lg">
-              <View className="flex-row items-center">
-                <AntDesign name="closecircle" size={20} color="white" />
-                <Text className="text-white font-semibold text-base ml-2">Delivery Cancelled</Text>
-              </View>
-            </Button>
+            <View className="bg-red-100 rounded-lg py-4 flex-row items-center justify-center">
+              <AntDesign name="closecircle" size={20} color="#b91c1c" />
+              <Text className="text-red-800 font-bold text-base ml-2">Delivery Cancelled</Text>
+            </View>
           </View>
         )}
       </View>
