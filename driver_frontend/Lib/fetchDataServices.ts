@@ -48,6 +48,11 @@ export async function DeliveryStatusChange(requestId: string, status: string) {
   if (status === "in_progress" || status === "accepted") {
     return AcceptDelivery(requestId);
   }
+  if (status === "collected" || status === "on_delivery") {
+    // Confirm pickup — mark as collected
+    const res = await api.patch(`/delivery/requests/${requestId}/update-status`, { status });
+    return res.data?.data || res.data;
+  }
   throw new Error(`Unknown status: ${status}`);
 }
 
