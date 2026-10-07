@@ -7,18 +7,18 @@ import { AuthProvider } from "@/context/AuthContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { io } from "socket.io-client";
 
-// Location tracking is native-only — skip on web
-if (Platform.OS !== "web") {
-  require("@/Lib/location/location-task");
-}
-
 function LocationTracker() {
   if (Platform.OS === "web") {
-    // Web: use browser Geolocation API + Socket.IO
     return <WebLocationTracker />;
   }
-  const { useLocationTracking } = require("@/Lib/location/useLocationTracking");
-  useLocationTracking();
+  // Native-only: lazy require to prevent expo-location from loading on web
+  try {
+    require("@/Lib/location/location-task");
+    const { useLocationTracking } = require("@/Lib/location/useLocationTracking");
+    useLocationTracking();
+  } catch (e) {
+    console.warn("[Location] Native tracking not available:", e);
+  }
   return null;
 }
 

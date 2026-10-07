@@ -1,53 +1,68 @@
 import { formatTime } from "@/Lib/utils";
-import { DeliveryQueueForDriver, DeliveryStatus } from "@/types";
+import { DeliveryStatus } from "@/types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import {  Text, TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 
 interface RouteListProps {
-  deliveries?: DeliveryQueueForDriver[];
+  deliveries?: any[];
   onStatusUpdate?: (deliveryId: string, newStatus: DeliveryStatus) => void;
 }
 
 export function RouteList({ deliveries, onStatusUpdate }: RouteListProps) {
   const [menuVisible, setMenuVisible] = useState<string | null>(null);
   const router = useRouter();
+
   const handleNavigation = (id: string) => {
-    // Navigate to the active delivery details page with the given ID
     router.push({
       pathname: "/(tabs)/active/[id]",
       params: { id },
     });
   };
-  const openMenu = (id: string) => {
-    setMenuVisible(menuVisible === id ? null : id);
-  };
 
-  const getStatusIcon = (status: DeliveryStatus) => {
+  const getStatusIcon = (status: string) => {
     switch (status) {
-      case DeliveryStatus.completed:
+      case "completed":
+      case "delivered":
         return "check-circle";
-      case DeliveryStatus.in_progress:
+      case "in_progress":
+      case "accepted":
+      case "collected":
+      case "on_delivery":
         return "map-marker";
-      case DeliveryStatus.cancelled:
+      case "cancelled":
+      case "failed":
         return "close-circle";
       default:
         return "map-marker";
     }
   };
 
-  const getStatusText = (status: DeliveryStatus) => {
+  const getStatusText = (status: string) => {
     switch (status) {
-      case DeliveryStatus.completed:
+      case "completed":
+      case "delivered":
         return "Completed";
-      case DeliveryStatus.in_progress:
+      case "in_progress":
+      case "accepted":
         return "In Progress";
-      case DeliveryStatus.cancelled:
+      case "collected":
+        return "Collected";
+      case "on_delivery":
+        return "On Delivery";
+      case "cancelled":
         return "Cancelled";
       default:
         return "Pending";
     }
+  };
+
+  const getAddress = (item: any) => {
+    const addr = item.delivery_address || item.dropoff_address;
+    if (!addr) return "Address not available";
+    if (typeof addr === "string") return addr;
+    return [addr.line1, addr.city, addr.postcode].filter(Boolean).join(", ");
   };
 
   const handleViewDetails = (deliveryId: string) => {
@@ -72,104 +87,111 @@ export function RouteList({ deliveries, onStatusUpdate }: RouteListProps) {
 
   return (
     <View className="gap-2">
-      {deliveries.map((delivery) => (
-        <TouchableOpacity
-          key={delivery.delivery_id}
-          onPress={() => handleViewDetails(delivery.delivery_id)}
-          className={`p-4 rounded-lg ${
-            delivery.status === DeliveryStatus.in_progress
-              ? "border-2 border-yellow-400 bg-gray-800"
-              : "bg-gray-800"
-          }`}
-        >
-          <View className="flex-row justify-between items-center">
-            <View className="flex-row items-center flex-1">
-              <View className="w-10 h-10 rounded-full bg-gray-600 justify-center items-center mr-3">
-                <MaterialCommunityIcons
-                  name={getStatusIcon(delivery.status)}
-                  size={20}
-                  color={
-                    delivery.status === DeliveryStatus.completed
-                      ? "#10B981"
-                      : "white"
-                  }
-                />
-              </View>
+      {deliveries.map((delivery) => {
+        const id = delivery.id || delivery.delivery_id;
+        const status = (delivery.status || "pending").toLowerCase();
+        const isActive = ["in_progress", "accepted", "collected", "on_delivery"].includes(status);
 
-              <View className="flex-1">
-                <Text className="font-semibold text-white text-base">
-                  {delivery.dropoff_location}
-                </Text>
-                <View className="flex-row items-center mt-1">
+        return (
+          <TouchableOpacity
+            key={id}
+            onPress={() => handleViewDetails(id)}
+            className={`p-4 rounded-lg ${
+              isActive
+                ? "border-2 border-yellow-400 bg-gray-800"
+                : "bg-gray-800"
+            }`}
+          >
+            <View className="flex-row justify-between items-center">
+              <View className="flex-row items-center flex-1">
+                <View className="w-10 h-10 rounded-full bg-gray-600 justify-center items-center mr-3">
                   <MaterialCommunityIcons
-                    name="clock-outline"
-                    size={12}
-                    color="#9CA3AF"
+                    name={getStatusIcon(status)}
+                    size={20}
+                    color={
+                      status === "completed" || status === "delivered"
+                        ? "#10B981"
+                        : "white"
+                    }
                   />
-                  <Text className="text-sm text-gray-400 ml-1">
-                    {formatTime(delivery.time_slot.start_time)}
+                </View>
+
+                <View className="flex-1">
+                  <Text className="font-semibold text-white text-base" numberOfLines={1}>
+                    {getAddress(delivery)}
                   </Text>
+                  <View className="flex-row items-center mt-1">
+                    <MaterialCommunityIcons
+                      name="clock-outline"
+                      size={12}
+                      color="#9CA3AF"
+                    />
+                    <Text className="text-sm text-gray-400 ml-1">
+                      {delivery.created_at
+                        ? formatTime(delivery.created_at)
+                        : delivery.scheduled_for
+                        ? formatTime(delivery.scheduled_for)
+                        : "--:--"}
+                    </Text>
+                  </View>
                 </View>
               </View>
-            </View>
 
-            <View className="flex-row items-center space-x-3">
-              <View className="bg-gray-700 px-3 py-1 rounded-full">
-                <Text className="text-xs font-medium text-white">
-                  {getStatusText(delivery.status)}
-                </Text>
-              </View>
+              <View className="flex-row items-center space-x-3">
+                <View className="bg-gray-700 px-3 py-1 rounded-full">
+                  <Text className="text-xs font-medium text-white">
+                    {getStatusText(status)}
+                  </Text>
+                </View>
 
-              <TouchableOpacity
-                onPress={() => openMenu(delivery.delivery_id)}
-                className="w-8 h-8 justify-center items-center"
-              >
-                <MaterialCommunityIcons
-                  name="dots-vertical"
-                  size={20}
-                  color="white"
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Simple Dropdown Menu */}
-          {menuVisible === delivery.delivery_id && (
-            <View className="mt-3 bg-gray-700 rounded-lg overflow-hidden">
-              <TouchableOpacity
-                onPress={() => handleViewDetails(delivery.delivery_id)}
-                className="px-4 py-3 border-b border-gray-600"
-              >
-                <Text className="text-white font-medium">View Details</Text>
-              </TouchableOpacity>
-
-              {delivery.status !== DeliveryStatus.completed && (
                 <TouchableOpacity
-                  onPress={() => {
-                    onStatusUpdate?.(
-                      delivery.delivery_id,
-                      DeliveryStatus.cancelled
-                    );
-                    setMenuVisible(null);
-                  }}
+                  onPress={() => setMenuVisible(menuVisible === id ? null : id)}
+                  className="w-8 h-8 justify-center items-center"
+                >
+                  <MaterialCommunityIcons
+                    name="dots-vertical"
+                    size={20}
+                    color="white"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Simple Dropdown Menu */}
+            {menuVisible === id && (
+              <View className="mt-3 bg-gray-700 rounded-lg overflow-hidden">
+                <TouchableOpacity
+                  onPress={() => handleViewDetails(id)}
                   className="px-4 py-3 border-b border-gray-600"
                 >
-                  <Text className="text-yellow-500 font-medium">
-                    Skip Delivery
-                  </Text>
+                  <Text className="text-white font-medium">View Details</Text>
                 </TouchableOpacity>
-              )}
 
-              <TouchableOpacity
-                onPress={() => setMenuVisible(null)}
-                className="px-4 py-3"
-              >
-                <Text className="text-red-400 font-medium">Report Issue</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </TouchableOpacity>
-      ))}
+                {status !== "completed" && status !== "delivered" && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      onStatusUpdate?.(id, DeliveryStatus.cancelled);
+                      setMenuVisible(null);
+                    }}
+                    className="px-4 py-3 border-b border-gray-600"
+                  >
+                    <Text className="text-yellow-500 font-medium">
+                      Skip Delivery
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  onPress={() => setMenuVisible(null)}
+                  className="px-4 py-3"
+                >
+                  <Text className="text-red-400 font-medium">Report Issue</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }

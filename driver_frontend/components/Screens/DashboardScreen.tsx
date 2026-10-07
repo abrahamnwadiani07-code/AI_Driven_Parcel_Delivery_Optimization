@@ -6,6 +6,7 @@ import Toast from "react-native-toast-message";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 import DeliveryQueue from "../ui/DeliveryQueue";
+import WeatherAlert from "../ui/WeatherAlert";
 import { DashboardDataFetcher, AgentRequestsFetcher, SetAgentStatus } from "@/Lib/fetchDataServices";
 
 const DashboardScreen = () => {
@@ -26,7 +27,10 @@ const DashboardScreen = () => {
         AgentRequestsFetcher().catch(() => []),
       ]);
 
-      if (dashboard) setDashData(dashboard);
+      if (dashboard) {
+        setDashData(dashboard);
+        setIsAvailable(dashboard.agent?.is_active ?? false);
+      }
       setDeliveries(Array.isArray(requests) ? requests : []);
 
       if (showToast) {
@@ -122,10 +126,33 @@ const DashboardScreen = () => {
           </View>
         )}
 
+        {/* Delivery Queue */}
+        <View className="bg-gray-900 p-4 rounded-lg mb-4">
+          <View className="flex-row justify-between items-center mb-3">
+            <Text className="text-base font-bold text-gray-100">
+              Current Delivery Queue
+            </Text>
+            <View className="bg-gray-100 px-3 py-1 rounded-full">
+              <Text className="text-gray-800 text-sm font-semibold">
+                {deliveries.length}{" "}
+                {deliveries.length === 1 ? "Package" : "Packages"}
+              </Text>
+            </View>
+          </View>
+
+          <DeliveryQueue
+            deliveryQueue={deliveries}
+            onRefresh={() => fetchDashboard(true)}
+          />
+        </View>
+
+        {/* Weather Alert */}
+        <WeatherAlert />
+
         {/* Daily Summary */}
         <View className="bg-gray-900 p-4 rounded-lg mb-4">
           <Text className="text-xl text-white text-center font-bold mb-4">
-            Today's Summary
+            Daily Summary
           </Text>
           <View className="space-y-3">
             <View className="flex-row gap-2">
@@ -136,43 +163,23 @@ const DashboardScreen = () => {
               />
               <SummaryCard
                 icon="currency-usd"
-                label="Earned"
+                label="Earnings"
                 value={dashData?.today_earnings ? parseFloat(dashData.today_earnings).toFixed(2) : "0.00"}
               />
             </View>
             <View className="flex-row gap-2">
               <SummaryCard
-                icon="truck-delivery"
+                icon="clock-outline"
                 label="Active"
                 value={String(dashData?.active_count ?? 0)}
               />
               <SummaryCard
                 icon="trending-up"
-                label="Accept Rate"
+                label="On-time"
                 value={`${dashData?.acceptance_rate ?? 0}%`}
               />
             </View>
           </View>
-        </View>
-
-        {/* Delivery Queue */}
-        <View className="bg-gray-900 p-4 rounded-lg mb-4">
-          <View className="flex-row justify-between items-center mb-3">
-            <Text className="text-base font-bold text-gray-100">
-              Available Deliveries
-            </Text>
-            <View className="bg-gray-100 px-3 py-1 rounded-full">
-              <Text className="text-gray-800 text-sm font-semibold">
-                {deliveries.length}{" "}
-                {deliveries.length === 1 ? "Order" : "Orders"}
-              </Text>
-            </View>
-          </View>
-
-          <DeliveryQueue
-            deliveryQueue={deliveries}
-            onRefresh={() => fetchDashboard(true)}
-          />
         </View>
       </ScrollView>
     </SafeAreaView>
